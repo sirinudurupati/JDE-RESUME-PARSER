@@ -153,8 +153,15 @@ def rematch_job(job_id):
     for c in storage.list_candidates(job_id, full=True):
         old = c["parsed"]
         dup_flags = [f for f in old.get("flags", []) if "possible duplicate" in f.lower()]
+        text = old["text"]
+        try:                         # re-read the saved file so reader improvements apply too
+            path = config.UPLOAD_DIR / c["stored_name"]
+            if path.exists():
+                text = extract_text(path.read_bytes(), path.suffix, config.RESUME_EXTS)
+        except Exception:
+            text = old["text"]
         try:                         # re-parse so parser improvements apply to saved resumes too
-            parsed = parse_resume(old["text"])
+            parsed = parse_resume(text)
             parsed["flags"] = parsed.get("flags", []) + dup_flags
             storage.update_parsed(c["id"], parsed)
         except Exception:

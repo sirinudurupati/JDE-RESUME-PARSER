@@ -8,7 +8,32 @@ class ExtractionError(Exception):
     """Raised with a user-presentable message."""
 
 
+def _pdf_text_plumber(data: bytes) -> str:
+    """pdfplumber keeps lines, spacing and column order much better than pypdf on
+    designed resumes (dates on the same line as the institution, spaced-out letters...)."""
+    import pdfplumber
+    pages = []
+    with pdfplumber.open(io.BytesIO(data)) as pdf:
+        if getattr(pdf, "doc", None) is not None and getattr(pdf.doc, "is_encrypted", False):
+            raise ExtractionError("PDF is password protected.")
+        for page in pdf.pages:
+            pages.append(page.extract_text(x_tolerance=2, y_tolerance=3) or "")
+    return "\n".join(pages)
+
+
 def _pdf_text(data: bytes) -> str:
+    try:
+        text = _pdf_text_plumber(data)
+        if len(text.strip()) >= 20:
+            return text
+    except ExtractionError:
+        raise
+    except Exception:
+        pass                      # fall back to pypdf below
+    return _pdf_text_pypdf(data)
+
+
+def _pdf_text_pypdf(data: bytes) -> str:
     from pypdf import PdfReader
     try:
         reader = PdfReader(io.BytesIO(data))

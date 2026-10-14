@@ -3,7 +3,7 @@
 *Your idea finds life here.*
 
 ## Run
-    pip install -r requirements.txt
+    pip install -r requirements.txt   # includes pdfplumber (PDF reading) and pypdf (fallback)
     python app.py            # http://localhost:8080
     python -m pytest -q      # tests
 

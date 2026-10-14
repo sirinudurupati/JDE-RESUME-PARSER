@@ -61,3 +61,22 @@ def test_jde_styled_unicode_and_certification_requirement():
     assert {"apex", "lwc", "soql", "rest api"} <= names
     assert r["certifications"] and r["certifications"][0]["mandatory"]
     assert r["title"].startswith("Salesforce")
+
+
+def test_year_on_institution_line_above_degree():
+    t = ("Varshini K\nvarshini@example.com\nEDUCATION\n"
+         "Vignan's Institute of Engineering for Women   2020 - 2024\n"
+         "- B.Tech (Computer Science and Engineering.)\n- CGPA - 7.23.\n"
+         "Sri Chaitanya Junior College   2018 - 2020\n- Intermediate (MPC)\n")
+    p = parse_resume(t, TODAY)
+    assert p["profile"]["graduation_year"] == 2024          # not the junior-college 2020
+    assert p["profile"]["highest_education"].startswith("Bachelor")
+
+
+def test_year_not_borrowed_from_other_degree_or_school():
+    t = ("Jane Roe\nEDUCATION\nM.Tech (CSE), ABC University - 2026\nB.Tech (CSE), XYZ University\n"
+         "Senior Secondary (XII) CBSE 2019 - 2020\n")
+    p = parse_resume(t, TODAY)
+    assert p["profile"]["graduation_year"] == 2026            # highest degree has its own year
+    b = [d for d in p["education"]["degrees"] if d["rank"] == 2][0]
+    assert b["year"] is None                                  # B.Tech year is NOT guessed from 2026 / 2020

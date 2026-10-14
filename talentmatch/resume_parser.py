@@ -289,12 +289,24 @@ def parse_education(lines, today):
         if not lv:
             continue
         years = [int(y) for y in YEAR_RX.findall(ln)]
-        j = i + 1
-        while not years and j < len(lines) and j <= i + 2:
-            if edu_levels_in(lines[j]):
-                break
-            years = [int(y) for y in YEAR_RX.findall(lines[j])]
-            j += 1
+        if not years:
+            # The dates often sit on the institution line ABOVE the degree
+            # ("XYZ Institute  2020 - 2024" / "B.Tech (CSE)") or just below it. Use the
+            # nearest neighbouring line that has a year, but never one that belongs to a
+            # school entry or to a different degree.
+            def usable(start, step):
+                k, seen = start, 0
+                while 0 <= k < len(lines) and seen < 2:       # nearest non-blank line (max 2)
+                    if lines[k].strip():
+                        seen += 1
+                        if SCHOOL_RX.search(lines[k]) or edu_levels_in(lines[k]):
+                            return []
+                        found = [int(y) for y in YEAR_RX.findall(lines[k])]
+                        if found:
+                            return found
+                    k += step
+                return []
+            years = usable(i - 1, -1) or usable(i + 1, 1)
         degrees.append({"rank": max(lv), "label": EDU_LEVELS[max(lv)],
                         "text": re.sub(r"\s+", " ", BULLET_RE.sub("", ln)).strip()[:140],
                         "year": max(years) if years else None})
