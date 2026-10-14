@@ -30,3 +30,13 @@ standard section headings 20, clear dates 10, single column 8, no tables 6, no t
 contact not in header 3, clean characters 10, length 5, measurable results 5. Bands: 80+ Good, 60-79 Fair, <60 Poor.
 Checks that can't be assessed (original file missing) are left out, not given full marks.
 Each ATS is proprietary, so this is an estimate of parse-friendliness, not a copy of any one product.
+
+### ATS score - MNC / enterprise model (the one shown in the table)
+score = 50 x parsing quality + 50 x exact keyword match with the job.
+Parsing (50): text 5, contact 6, headings 8, single column 4, no tables 3, no text boxes/header contact 3,
+no photo/icons 4, each job parsed into company+title+dates 8, degree+year 4, newest-first 3, month+year dates 3, 1-2 pages 2.
+Keywords (50): mandatory x2, preferred x1; only exact/equivalent terms count (a "related" skill does not match in an ATS).
+Bands: 75+ Likely to pass, 55-74 Borderline, <55 At risk. "Knockout risks" list hard requirements an enterprise ATS
+may auto-filter on (missing mandatory keyword/certification, experience or education below minimum) - warnings only.
+Not-applicable checks (e.g. no work history for a fresher) are left out, not penalised.
+The earlier plain readability score is still shown in the details.

@@ -21,8 +21,8 @@ function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3200);
 }
-const atsBand = (s) => (s >= 80 ? "good" : s >= 60 ? "mid" : "low");
-const atsText = { good: "Good", mid: "Fair", low: "Poor" };
+const atsBand = (s) => (s >= 75 ? "good" : s >= 55 ? "mid" : "low");
+const atsText = { good: "Likely to pass", mid: "Borderline", low: "At risk" };
 const band = (s) => (s >= 75 ? "good" : s >= 50 ? "mid" : "low");
 const bandText = { good: "Strong", mid: "Moderate", low: "Low" };
 function meter(score) {
@@ -216,7 +216,7 @@ function atsCell(a) {
   const b = atsBand(a.score);
   const tip = a.issues.length ? a.issues.join(" | ") : "No ATS problems found";
   return `<div class="score" title="${esc(tip)}"><b class="s-${b}">${a.score.toFixed(0)}</b>${meter(a.score)}</div>` +
-    `<span class="band ${b}">${atsText[b]}</span>` + (a.layout_assessed ? "" : ` <small class="none" title="Original file unavailable">layout not checked</small>`);
+    `<span class="band ${b}">${atsText[b]}</span>` + (a.knockouts && a.knockouts.length ? ` <span class="chip miss" title="${esc(a.knockouts.join(" | "))}">${a.knockouts.length} knockout risk</span>` : "") + (a.layout_assessed ? "" : ` <small class="none" title="Original file unavailable">layout not checked</small>`);
 }
 
 function gradCell(p) {
@@ -264,7 +264,7 @@ function renderTable() {
     : sort === "name" ? (a.name || "~").localeCompare(b.name || "~")
     : sort === "experience" ? (a.result?.experience.relevant_years ?? -1) < (b.result?.experience.relevant_years ?? -1) ? 1 : -1
     : sort === "skills" ? cat(b, "skills") - cat(a, "skills")
-    : sort === "ats" ? (b.result?.ats?.score ?? -1) - (a.result?.ats?.score ?? -1)
+    : sort === "ats" ? (b.result?.ats_mnc?.score ?? -1) - (a.result?.ats_mnc?.score ?? -1)
     : (b.overall ?? -1) - (a.overall ?? -1));
 
   const reviewN = candidates.filter((c) => c.result && c.result.needs_review).length;
@@ -297,7 +297,7 @@ function renderTable() {
       <td>${expTotalCell(r.profile)}</td>
       <td>${certCell(r.profile)}</td>
       <td><div class="score"><b class="s-${b}">${o.toFixed(1)}</b>${meter(o)}<span class="band ${b}">${bandText[b]}</span></div></td>
-      <td class="col-ats">${atsCell(r.ats)}</td>
+      <td class="col-ats">${atsCell(r.ats_mnc)}</td>
       <td>${fmtPct(r.categories.skills.applicable ? r.categories.skills.score : null)}</td>
       <td>${expCell}</td>
       <td>${miss || '<span class="none">None</span>'}</td>
@@ -365,7 +365,7 @@ async function showDetail(id) {
         <tr><td>Roles</td><td>${r.profile && r.profile.roles.length ? r.profile.roles.map(esc).join("<br>") : "—"}</td></tr>
         <tr><td>Certifications</td><td>${r.profile && r.profile.certifications.length ? r.profile.certifications.map(esc).join("<br>") : "None listed"}</td></tr>
       </tbody></table></div>
-    <div class="sec"><h3>ATS score — can an Applicant Tracking System read this resume?</h3>${atsHtml(r.ats)}</div>
+    <div class="sec"><h3>ATS score (MNC / enterprise-ATS model)</h3>${atsMncHtml(r.ats_mnc, r.ats)}</div>
     <div class="sec"><h3>Score breakdown</h3>${cats}</div>
     <div class="sec"><h3>Why this score</h3><ul class="plain">${r.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
     <div class="sec"><h3>Requirements</h3>
@@ -399,6 +399,30 @@ function atsHtml(a) {
     ${k ? `<p style="margin-top:8px"><b>Job keywords found in the resume:</b> ${k.found} of ${k.total} (${k.pct}%)${k.missing.length ? " · not found: " + k.missing.map(esc).join(", ") : ""}
       <span class="ev">— only add a keyword if you genuinely have that skill.</span></p>` : ""}
     <p class="ev">${esc(a.note)} This is separate from the job-match score above.</p>`;
+}
+
+function atsMncHtml(m, std) {
+  if (!m) return "<p class='none'>Not available — click Save &amp; re-run matching.</p>";
+  const b = atsBand(m.score);
+  const chip = { pass: "ok", warn: "rel", fail: "miss", na: "" };
+  const lbl = { pass: "OK", warn: "Improve", fail: "Problem", na: "n/a" };
+  const rows = m.checks.map((c) => `<tr><td>${esc(c.label)}</td><td><span class="chip ${chip[c.status]}">${lbl[c.status]}</span></td>
+      <td><b>${c.status === "na" ? "—" : c.points + " / " + c.max}</b></td>
+      <td>${esc(c.detail)}${c.fix ? `<div class="ev">Fix: ${esc(c.fix)}</div>` : ""}</td></tr>`).join("");
+  const kw = (m.keywords || []);
+  const kwRows = kw.map((k) => `<span class="chip ${k.found ? "ok" : k.related_only ? "rel" : "miss"}" title="${k.found ? "found" : k.related_only ? "only a related skill - an ATS will not match it" : "not found"}">${esc(k.term)}${k.level === "mandatory" ? " ★" : ""}</span>`).join("");
+  const kwFound = kw.filter((k) => k.found).length;
+  return `<div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <div><span class="big s-${b}">${m.score.toFixed(0)}</span><small style="font-size:16px">/100</small></div>
+      <span class="band ${b}">${atsText[b]}</span>
+      <div class="ev" style="font-style:normal"><b>${m.parse_score}</b> / 50 resume parsing &nbsp;+&nbsp; <b>${m.keyword_score === null ? "n/a" : m.keyword_score}</b> / 50 keyword match with the job</div></div>
+    ${m.knockouts.length ? `<div class="banner"><b>Knockout risks</b> — an enterprise ATS may auto-filter on these (this tool does not reject anyone):<ul>${m.knockouts.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    <h4 style="margin:12px 0 4px">Keyword match (${kwFound} of ${kw.length} job keywords found; ★ = mandatory)</h4>
+    <div>${kwRows || "<span class='none'>The job defines no keywords.</span>"}</div>
+    <div class="ev">Green = found · Amber = only a related skill (an ATS does not count it) · Red = not found. Add a keyword only if you genuinely have the skill.</div>
+    <h4 style="margin:14px 0 4px">Resume parsing (how cleanly an ATS can read the file)</h4>
+    <div class="table-wrap"><table class="dtable"><thead><tr><th>Check</th><th>Result</th><th>Points</th><th>What was found</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="ev">${esc(m.note)}${std ? ` · Plain readability score (no keywords): ${std.score.toFixed(0)}/100.` : ""}${m.layout_assessed ? "" : " Layout checks need the original file."}</p>`;
 }
 
 // --------------------------------------------------------------- init

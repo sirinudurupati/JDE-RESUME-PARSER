@@ -14,6 +14,7 @@ import re
 
 from . import skills as sk
 from .ats import ats_report
+from .ats_mnc import mnc_report
 from .config import CATEGORY_LABELS, DEFAULT_EXPERIENCE_COUNTING, normalize_weights
 from .textutil import content_stems, edu_levels_in, EDU_LEVELS
 
@@ -498,7 +499,23 @@ def score_candidate(job: dict, weights: dict, resume: dict) -> dict:
     if na:
         reasons.append("Not scored (excluded and weights redistributed): " + ", ".join(na) + ".")
 
+    # knockout risks: hard requirements an enterprise ATS may auto-filter on. Shown to HR as
+    # warnings only - this tool never rejects anyone.
+    knockouts = []
+    if missing_m:
+        knockouts.append("Mandatory keyword(s) not found: " + ", ".join(i["display"] for i in missing_m))
+    if exp_info.get("required_months") and exp_info.get("mandatory", True) \
+            and exp_info["relevant_months"] < exp_info["required_months"]:
+        knockouts.append(f"Relevant experience {exp_info['relevant_months']:g} months is below the "
+                         f"required {exp_info['required_months']} months")
+    if edu_info.get("required") and edu_info.get("mandatory") and edu_info.get("status") in ("below", "one level below", "unverified"):
+        knockouts.append(f"Education requirement ({edu_info['required']}) not met or not detected")
+    for c in cert_items:
+        if c["mandatory"] and not c["found"]:
+            knockouts.append(f"Mandatory certification not found: {c['name']}")
+
     return {
+        "ats_mnc": mnc_report(resume, skill_items, knockouts),
         "overall": overall,
         "categories": cats,
         "skills": skill_items,
