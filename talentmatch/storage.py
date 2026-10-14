@@ -193,4 +193,14 @@ def counts():
     with db() as c:
         j = c.execute("SELECT COUNT(*) n FROM jobs").fetchone()["n"]
         a = c.execute("SELECT COUNT(*) n FROM candidates").fetchone()["n"]
-    return {"jobs": j, "applicants": a}
+        d = c.execute("SELECT COUNT(DISTINCT file_hash) n FROM candidates").fetchone()["n"]
+    return {"jobs": j, "applicants": a, "distinct_resumes": d}
+
+
+def pool_candidates(exclude_job_id):
+    """One record per distinct resume file (newest copy) held by jobs other than `exclude_job_id`."""
+    with db() as c:
+        rows = c.execute(
+            "SELECT * FROM candidates WHERE job_id != ? AND id IN "
+            "(SELECT MAX(id) FROM candidates GROUP BY file_hash) ORDER BY id", (exclude_job_id,)).fetchall()
+    return [dict(r) for r in rows]

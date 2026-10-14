@@ -68,7 +68,8 @@
             <small>PDF, DOCX or TXT · max {{ max_file_mb }} MB</small>
           </div>
           <input type="file" id="jde-input" accept=".pdf,.docx,.txt" hidden>
-          <div class="msg" id="jde-msg" role="status" aria-live="polite"></div>
+          <label class="check" style="margin-top:8px;align-items:flex-start"><input type="checkbox" id="reuse" checked style="margin-top:4px"><span>Also match the <b id="pool-n">0</b> resume(s) already uploaded against this new job</span></label>
+        <div class="msg" id="jde-msg" role="status" aria-live="polite"></div>
         </section>
 
         <section class="card">
@@ -167,6 +168,7 @@
           <div class="card-head">
             <h2 id="rank-h"><span class="step">3</span> Candidate ranking</h2>
             <div class="row">
+              <button class="btn ghost" id="use-existing" title="Add every resume uploaded for other jobs and score it against this job">Match all uploaded resumes</button>
               <button class="btn ghost" id="exp-csv">Export CSV</button>
               <button class="btn ghost" id="exp-xlsx">Export Excel</button>
             </div>

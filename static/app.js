@@ -46,6 +46,7 @@ async function loadJobs(selectId) {
   const data = await api("/api/jobs");
   jobs = data.jobs;
   $("st-all").textContent = data.counts.applicants;
+  $("pool-n").textContent = data.counts.distinct_resumes;
   $("st-jobs").textContent = jobs.length;
   const sel = $("job-select");
   sel.innerHTML = jobs.length
@@ -72,9 +73,11 @@ async function uploadJde(files) {
   const f = files[0]; if (!f) return;
   const msg = $("jde-msg"); msg.className = "msg"; msg.textContent = `Reading ${f.name}…`;
   const fd = new FormData(); fd.append("file", f);
+  fd.append("reuse_resumes", $("reuse").checked ? "1" : "0");
   try {
-    const { job } = await api("/api/jobs/upload", { method: "POST", body: fd });
-    msg.className = "msg ok"; msg.textContent = "Job created. Review the extracted requirements, then save.";
+    const { job, carried } = await api("/api/jobs/upload", { method: "POST", body: fd });
+    msg.className = "msg ok";
+    msg.textContent = "Job created and now active." + (carried ? ` ${carried} existing resume(s) were matched against it.` : "") + " Review the extracted requirements, then save.";
     await loadJobs(job.id);
     $("editor-card").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) { msg.className = "msg err"; msg.textContent = e.message; }
@@ -439,6 +442,14 @@ async function init() {
     await api(`/api/jobs/${j.id}`, { method: "DELETE" }); activeId = null; await loadJobs(); toast("Job deleted.");
   });
   $("editor-form").addEventListener("submit", saveEditor);
+  $("use-existing").addEventListener("click", async () => {
+    if (!activeId) return;
+    try {
+      const { carried } = await api(`/api/jobs/${activeId}/use-existing-resumes`, { method: "POST" });
+      toast(carried ? `${carried} resume(s) added and matched to this job.` : "No new resumes to add - this job already has them all.");
+      await loadJobs(activeId);
+    } catch (e) { toast(e.message); }
+  });
   $("editor-reextract").addEventListener("click", async () => {
     if (!confirm("Re-read the uploaded document and replace the current requirements (your edits will be lost)?")) return;
     try { await api(`/api/jobs/${activeId}/reextract`, { method: "POST" }); toast("Requirements re-extracted."); await loadJobs(activeId); }

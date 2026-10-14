@@ -180,6 +180,30 @@ def rematch_job(job_id):
     return n
 
 
+def carry_over_resumes(job_id):
+    """Match every resume already uploaded (to any job) against `job_id`.
+
+    Each resume is COPIED into the job (record + file), so older jobs keep their own history and
+    results, and deleting a candidate in one job never touches another job's copy.
+    -> number of resumes added."""
+    import json
+    import shutil
+    added = 0
+    for row in storage.pool_candidates(job_id):
+        if storage.find_by_hash(job_id, row["file_hash"]):
+            continue                                   # already in this job
+        src = config.UPLOAD_DIR / row["stored_name"]
+        if not src.exists():
+            continue                                   # file gone: cannot offer it for preview/re-read
+        stored = uuid.uuid4().hex + src.suffix
+        shutil.copyfile(src, config.UPLOAD_DIR / stored)
+        storage.add_candidate(job_id, json.loads(row["parsed"]), row["filename"], stored, row["file_hash"])
+        added += 1
+    if added:
+        rematch_job(job_id)                            # re-reads each file and scores it against THIS job
+    return added
+
+
 def remove_file(stored_name):
     if not stored_name:
         return

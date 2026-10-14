@@ -91,9 +91,17 @@ def create_app():
             job_id, _ = service.create_job_from_upload(f.filename, data)
         except ExtractionError as e:
             return jsonify(error=str(e)), 400
+        carried = 0
+        if request.form.get("reuse_resumes", "1") == "1":
+            carried = service.carry_over_resumes(job_id)      # latest JD scores the resumes already uploaded
         job = storage.get_job(job_id)
         job["requirements"].pop("raw_text", None)
-        return jsonify(job=job), 201
+        return jsonify(job=job, carried=carried), 201
+
+    @app.post("/api/jobs/<int:job_id>/use-existing-resumes")
+    def api_use_existing(job_id):
+        need_job(job_id)
+        return jsonify(carried=service.carry_over_resumes(job_id))
 
     @app.get("/api/jobs/<int:job_id>")
     def api_job(job_id):

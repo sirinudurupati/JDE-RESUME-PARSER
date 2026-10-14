@@ -52,7 +52,12 @@ def resume_a():
 
 
 @pytest.fixture()
-def client():
+def client(tmp_path, monkeypatch):
+    """A fresh, empty database and upload folder for every test (tests must not see each other's resumes)."""
+    from talentmatch import config
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "talentmatch.db")
     from talentmatch.web import create_app
     app = create_app()
     app.config["TESTING"] = True
