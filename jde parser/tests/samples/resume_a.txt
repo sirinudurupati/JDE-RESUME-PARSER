@@ -1,0 +1,26 @@
+Aarav Mehta
+aarav.mehta@example.com | +91 98765 43210 | github.com/aaravm
+
+Summary
+Backend developer who likes building APIs.
+
+Skills
+Python, FastAPI, Flask, PostgreSQL, Git, Docker
+
+Work Experience
+Backend Developer
+Nimbus Labs, Pune
+Jan 2021 - Mar 2023
+- Built REST APIs using FastAPI and PostgreSQL
+- Wrote unit tests with pytest
+
+Software Engineer Intern
+Acme Corp
+Jun 2020 - Dec 2020
+- Developed internal tools in Python
+
+Education
+B.Tech in Computer Science, ABC University, 2016 - 2020
+
+Certifications
+- AWS Certified Cloud Practitioner

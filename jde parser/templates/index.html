@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIURU · TalentMatch</title>
+  <link rel="icon" type="image/png" href="/static/logo.png">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+  <a class="skip" href="#ranking">Skip to candidate ranking</a>
+
+  <header class="top">
+    <div class="brand">
+      <img src="/static/logo.png" alt="SIURU logo" class="logo" width="58" height="56">
+      <div>
+        <div class="name">SIURU</div>
+        <div class="tag">Your idea finds life here</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="product">TalentMatch</div>
+      <div class="sub">JDE &amp; Resume Intelligence · HR Dashboard</div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="stats" aria-label="Summary">
+      <div class="stat">
+        <div class="n" id="st-jobs">0</div>
+        <div class="l">Job descriptions</div>
+      </div>
+      <div class="stat">
+        <div class="n" id="st-all">0</div>
+        <div class="l">Applicants (all jobs)</div>
+      </div>
+      <div class="stat">
+        <div class="n" id="st-job">0</div>
+        <div class="l">Applicants · active job</div>
+      </div>
+      <div class="stat">
+        <div class="n" id="st-review">0</div>
+        <div class="l">Need manual review · active job</div>
+      </div>
+    </section>
+
+    <div class="grid">
+      <aside class="side">
+        <section class="card">
+          <h2><span class="step">1</span> Job description (JDE)</h2>
+          <label class="field-label" for="job-select">Active job</label>
+          <div class="row">
+            <select id="job-select" aria-describedby="job-hint"></select>
+            <button class="btn danger ghost" id="job-delete" title="Delete this job and all its candidates"
+              aria-label="Delete this job">Delete</button>
+          </div>
+          <p class="hint" id="job-hint">Every resume you upload is matched only against the active job.</p>
+
+          <div class="drop" id="jde-drop" tabindex="0" role="button" aria-label="Upload a job description file">
+            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+              <path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" fill="none"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <strong>Upload JDE</strong>
+            <span>Drop a job description here or click to browse</span>
+            <small>PDF, DOCX or TXT · max {{ max_file_mb }} MB</small>
+          </div>
+          <input type="file" id="jde-input" accept=".pdf,.docx,.txt" hidden>
+          <div class="msg" id="jde-msg" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="card">
+          <h2><span class="step">2</span> Candidate resumes</h2>
+          <div class="drop" id="cv-drop" tabindex="0" role="button" aria-label="Upload resumes">
+            <svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true">
+              <path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <strong>Upload resumes</strong>
+            <span>Select or drop <b>50, 100 or more</b> files at once</span>
+            <small>PDF or DOCX · max {{ max_file_mb }} MB each</small>
+          </div>
+          <input type="file" id="cv-input" accept=".pdf,.docx" multiple hidden>
+          <button class="btn ghost wide" id="cv-folder-btn" type="button">Choose a whole folder…</button>
+          <input type="file" id="cv-folder" webkitdirectory multiple hidden>
+          <div class="progress" id="cv-progress" hidden>
+            <div class="bar"><span id="cv-bar"></span></div>
+            <div class="ptext" id="cv-ptext" role="status" aria-live="polite"></div>
+          </div>
+          <div class="results-log" id="cv-log"></div>
+        </section>
+
+        <p class="fine">Match scores estimate job alignment to support a human decision. They are not proof a candidate
+          is qualified, and nobody is rejected automatically. Age, gender, religion, marital status and photos are never
+          used.</p>
+      </aside>
+
+      <section class="main">
+        <section class="card" id="editor-card" hidden>
+          <div class="card-head">
+            <h2>Review job requirements</h2>
+            <button class="btn ghost" id="editor-reextract"
+              title="Re-read the uploaded document with the latest parser (discards your edits)">Re-extract from
+              document</button>
+            <button class="btn ghost" id="editor-toggle" aria-expanded="true">Hide</button>
+          </div>
+          <div id="editor-body">
+            <div class="banner" id="editor-flags" hidden></div>
+            <form id="editor-form" autocomplete="off">
+              <div class="cols">
+                <label>Job title<input id="e-title" required maxlength="120"></label>
+                <label>Department<input id="e-dept" maxlength="120"></label>
+              </div>
+              <label>Mandatory skills <small>(comma separated; write "SQL or MySQL" when any one is enough)</small><input id="e-mand"></label>
+              <label>Preferred skills <small>(comma separated; "or" = alternatives)</small><input id="e-pref"></label>
+              <div class="cols">
+                <label>Minimum relevant experience (years)<input id="e-years" type="number" min="0" max="60" step="0.5"
+                    placeholder="not required"></label>
+                <label class="check"><input type="checkbox" id="e-years-m" checked> Experience is mandatory</label>
+              </div>
+              <div class="cols3">
+                <label>Maximum experience (years) <small>(info only, never penalised)</small><input id="e-maxyears"
+                    type="number" min="0" max="60" step="0.5" placeholder="no maximum"></label>
+              </div>
+              <fieldset class="weights" id="counting-box">
+                <legend>How each employment type counts toward relevant experience</legend>
+                <div class="wgrid" id="counting"></div>
+              </fieldset>
+              <div class="cols3" style="margin-top:12px">
+                <label>Minimum education
+                  <select id="e-edu">
+                    <option value="">Not required</option>
+                    <option value="1">Diploma</option>
+                    <option value="2">Bachelor's degree</option>
+                    <option value="3">Master's degree</option>
+                    <option value="4">Doctorate</option>
+                  </select></label>
+                <label>Field <small>(info only)</small><input id="e-field" maxlength="80"></label>
+                <label class="check"><input type="checkbox" id="e-edu-m" checked> Education is mandatory</label>
+              </div>
+              <div class="cols">
+                <label>Mandatory certifications <small>(one per line)</small><textarea id="e-cert-m"
+                    rows="2"></textarea></label>
+                <label>Preferred certifications <small>(one per line)</small><textarea id="e-cert-p"
+                    rows="2"></textarea></label>
+              </div>
+              <label>Responsibilities <small>(one per line)</small><textarea id="e-resp" rows="5"></textarea></label>
+
+              <fieldset class="weights">
+                <legend>Scoring weights <small>(any total; rescaled to 100 over the categories that apply)</small>
+                </legend>
+                <div class="wgrid" id="weights"></div>
+                <div class="wsum">Total: <b id="w-total">100</b> <button type="button" class="link" id="w-reset">Reset
+                    to defaults</button></div>
+              </fieldset>
+              <div class="row end">
+                <span class="msg" id="editor-msg" role="status" aria-live="polite"></span>
+                <button class="btn primary" type="submit">Save &amp; re-run matching</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="card" id="ranking" aria-labelledby="rank-h">
+          <div class="card-head">
+            <h2 id="rank-h"><span class="step">3</span> Candidate ranking</h2>
+            <div class="row">
+              <button class="btn ghost" id="exp-csv">Export CSV</button>
+              <button class="btn ghost" id="exp-xlsx">Export Excel</button>
+            </div>
+          </div>
+          <div class="filters">
+            <label>Search name<input id="f-search" type="search" placeholder="Candidate name"></label>
+            <label>Missing skill<input id="f-missing" type="search" placeholder="e.g. Docker"></label>
+            <label>Min score<input id="f-min" type="number" min="0" max="100" value="0"></label>
+            <label>Max score<input id="f-max" type="number" min="0" max="100" value="100"></label>
+            <label>Sort by
+              <select id="f-sort">
+                <option value="overall">Overall match</option>
+                <option value="experience">Relevant experience</option>
+                <option value="skills">Skills match</option>
+                <option value="grad">Graduation year (newest)</option>
+                <option value="totalexp">Total experience (most)</option>
+                <option value="name">Name (A–Z)</option>
+              </select></label>
+            <label class="check"><input type="checkbox" id="f-review"> Needs review only</label>
+          </div>
+          <div class="count" id="f-count" role="status" aria-live="polite"></div>
+          <div class="table-wrap">
+            <table id="tbl">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Candidate</th>
+                  <th scope="col">Passed out</th>
+                  <th scope="col">Work experience</th>
+                  <th scope="col">Certifications</th>
+                  <th scope="col">Overall match</th>
+                  <th scope="col">Skills</th>
+                  <th scope="col">Relevant to job</th>
+                  <th scope="col">Missing mandatory</th>
+                  <th scope="col"><span class="sr">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="empty">Upload a job description, then add resumes to see the ranked results.</div>
+        </section>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="detail" aria-labelledby="d-title">
+    <div class="dhead">
+      <div>
+        <h2 id="d-title"></h2>
+        <div class="dsub" id="d-sub"></div>
+      </div>
+      <button class="btn ghost" id="d-close" aria-label="Close details">Close</button>
+    </div>
+    <div id="d-body"></div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
