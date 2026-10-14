@@ -1,4 +1,5 @@
 """Flask app factory + JSON API + the single dashboard page."""
+import hmac
 import os
 from urllib.parse import urlparse
 
@@ -16,7 +17,36 @@ def create_app():
                 static_folder=str(ROOT / "static"))
     app.config["MAX_CONTENT_LENGTH"] = config.MAX_REQUEST_MB * 1024 * 1024
     app.config["MAX_FORM_PARTS"] = 5000
+
+    production = os.environ.get("TM_ENV", "").lower() == "production"
+    if production and not os.environ.get("TM_PASSWORD"):
+        # candidate data is personal: never run a public deployment without a login
+        raise RuntimeError("TM_PASSWORD must be set when TM_ENV=production (the app holds candidate data).")
+    if production:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)   # Render/Railway sit behind a proxy
     storage.init()
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify(status="ok")                       # used by the host's health check (no login)
+
+    @app.before_request
+    def require_login():
+        """HTTP Basic login when TM_PASSWORD is set (always, in production). Read per request."""
+        password = os.environ.get("TM_PASSWORD")
+        if not password or request.path == "/healthz":
+            return None
+        user = os.environ.get("TM_USER", "hr")
+        auth = request.authorization
+        ok = bool(auth) and auth.type == "basic"
+        if ok:
+            ok = (hmac.compare_digest((auth.username or "").encode(), user.encode())
+                  and hmac.compare_digest((auth.password or "").encode(), password.encode()))
+        if ok:
+            return None
+        return Response("Sign in to SIURU TalentMatch.", 401,
+                        {"WWW-Authenticate": 'Basic realm="SIURU TalentMatch", charset="UTF-8"'})
 
     @app.before_request
     def csrf_guard():
@@ -35,6 +65,8 @@ def create_app():
             "frame-ancestors 'self'")
         if request.path.startswith("/api/"):
             resp.headers["Cache-Control"] = "no-store"
+        if production:
+            resp.headers["Strict-Transport-Security"] = "max-age=31536000"
         return resp
 
     @app.errorhandler(413)

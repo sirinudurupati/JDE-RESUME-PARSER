@@ -40,3 +40,19 @@ Bands: 75+ Likely to pass, 55-74 Borderline, <55 At risk. "Knockout risks" list 
 may auto-filter on (missing mandatory keyword/certification, experience or education below minimum) - warnings only.
 Not-applicable checks (e.g. no work history for a fresher) are left out, not penalised.
 The earlier plain readability score is still shown in the details.
+
+## Deploying (Render or Railway) - not Vercel
+Vercel's serverless functions have no permanent disk and a 4.5 MB request limit, so this app (SQLite + uploaded resumes)
+needs a host with a persistent disk. Production settings (environment variables):
+
+| Variable | Value |
+|---|---|
+| `TM_ENV` | `production` (the app refuses to start without `TM_PASSWORD`) |
+| `TM_PASSWORD` | the login password (user name is `TM_USER`, default `hr`) |
+| `TM_DATA_DIR` | folder on the persistent disk, e.g. `/var/data` |
+
+Start command: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 180` (also in `Procfile`).
+Health check: `/healthz`. **Render:** New + > Blueprint > choose the repo/branch (`render.yaml` does the rest) and enter
+`TM_PASSWORD`. **Railway:** New Project > Deploy from GitHub, add a Volume mounted at `/data`, set `TM_DATA_DIR=/data`,
+`TM_ENV=production`, `TM_PASSWORD`. Without a persistent disk, every redeploy erases all candidates and resumes.
+Development/tests: `pip install -r requirements-dev.txt`.
