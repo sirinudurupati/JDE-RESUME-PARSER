@@ -1,0 +1,15 @@
+# Candidate data and uploaded resumes - personal information, never commit
+data/
+*.db
+*.sqlite3
+
+# runtime / tooling
+server.log
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+.idea/
+.vscode/

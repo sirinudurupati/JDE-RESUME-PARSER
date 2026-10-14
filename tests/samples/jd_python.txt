@@ -1,0 +1,22 @@
+Job Title: Python Developer
+Department: Engineering
+
+About the company
+siuru builds software products for growing teams.
+
+Responsibilities:
+- Develop and maintain REST APIs using FastAPI
+- Write SQL queries and design database schemas
+- Write unit tests and review code
+- Deploy services using Docker
+
+Requirements:
+- 2+ years of experience in backend development
+- Strong knowledge of Python, SQL and FastAPI
+- Bachelor's degree in Computer Science or related field
+- Experience with Git
+
+Preferred Skills:
+- Docker
+- AWS Certified Cloud Practitioner
+- Experience with Redis
