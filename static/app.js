@@ -224,7 +224,7 @@ function atsCell(a) {
   const n = a.knockouts ? a.knockouts.length : 0;
   return `<div class="score" title="${esc(tip)}"><b class="s-${b}">${a.score.toFixed(0)}</b>${meter(a.score)}</div>` +
     `<div class="atsmeta"><span class="band ${b}">${atsText[b]}</span>` +
-    (n ? `<span class="risk" title="Knockout risks (an enterprise ATS may auto-filter): ${esc(a.knockouts.join(" | "))}">⚠ ${n} risk${n > 1 ? "s" : ""}</span>` : "") +
+    (n ? `<span class="risk" title="Knockout risks (an enterprise ATS may auto-filter): ${esc(a.knockouts.join(" | "))}">⚠ ${n} knockout risk${n > 1 ? "s" : ""}</span>` : "") +
     (a.layout_assessed ? "" : `<span class="none" title="Original file unavailable"> · layout not checked</span>`) + `</div>`;
 }
 
@@ -315,7 +315,8 @@ function candidateCard(c, rank) {
     ? chips.slice(0, 8).join("") + (chips.length > 8 ? `<span class="chip" title="${esc([...r.missing_mandatory, ...r.related_mandatory].join(", "))}">+${chips.length - 8} more</span>` : "")
     : `<span class="chip ok">None - all mandatory skills found</span>`;
   const ats = m ? `<div class="sbox ats-box"><div class="sl">ATS score (MNC)</div>${atsCell(m)}
-      <div class="ss">Parsing ${m.parse_score}/50 · Keywords ${m.keyword_score === null ? "n/a" : m.keyword_score + "/50"}</div></div>` : "";
+      <div class="ss">Parsing ${m.parse_score}/50 · Keywords ${m.keyword_score === null ? "n/a" : m.keyword_score + "/50"}</div>
+      ${(m.knockouts || []).map((k) => `<div class="why" title="${esc(k)}"><b>Why risk:</b> ${esc(k.length > 150 ? k.slice(0, 147) + "…" : k)}</div>`).join("")}</div>` : "";
   return `<article class="cand">
     <div class="cand-head">
       <div class="rank" aria-label="Rank ${rank}">${rank}</div>

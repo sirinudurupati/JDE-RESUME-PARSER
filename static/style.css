@@ -197,3 +197,5 @@ table.hide-ats .col-ats{display:none}
 .cards.hide-ats .ats-box{display:none}
 /* upload progress text must wrap, never cut off */
 .ptext,.results-log div,.msg{white-space:normal;overflow-wrap:anywhere}
+
+.why{margin-top:6px;font-size:12.5px;color:var(--low);background:var(--low-bg);border-radius:8px;padding:5px 9px;overflow-wrap:anywhere}
