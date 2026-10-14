@@ -462,6 +462,7 @@ def parse_resume(text: str, today: date = None) -> dict:
             "roles": [e["title"] for e in entries if e.get("dates_ok")][:8],
             "certifications": certs,
         },
+        "sections": [k for k, ls in by_sec.items() if k != "header" and any(l.strip() for l in ls)],
         "flags": list(dict.fromkeys(flags)),
         "text": text,
         "month_range": (idx_to_str(min(months)), idx_to_str(max(months))) if months else None,

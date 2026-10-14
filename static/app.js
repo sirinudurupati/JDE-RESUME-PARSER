@@ -21,6 +21,8 @@ function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 3200);
 }
+const atsBand = (s) => (s >= 80 ? "good" : s >= 60 ? "mid" : "low");
+const atsText = { good: "Good", mid: "Fair", low: "Poor" };
 const band = (s) => (s >= 75 ? "good" : s >= 50 ? "mid" : "low");
 const bandText = { good: "Strong", mid: "Moderate", low: "Low" };
 function meter(score) {
@@ -209,6 +211,14 @@ async function loadCandidates() {
 }
 function missingList(c) { return (c.result && c.result.missing_mandatory) || []; }
 
+function atsCell(a) {
+  if (!a) return `<span class="none">n/a</span>`;
+  const b = atsBand(a.score);
+  const tip = a.issues.length ? a.issues.join(" | ") : "No ATS problems found";
+  return `<div class="score" title="${esc(tip)}"><b class="s-${b}">${a.score.toFixed(0)}</b>${meter(a.score)}</div>` +
+    `<span class="band ${b}">${atsText[b]}</span>` + (a.layout_assessed ? "" : ` <small class="none" title="Original file unavailable">layout not checked</small>`);
+}
+
 function gradCell(p) {
   if (!p || !p.graduation_year) return `<span class="none">Not found</span>`;
   return `<b>${p.graduation_year}</b>${p.graduation_expected ? ' <small>(expected)</small>' : ""}<div class="cfile">${esc((p.highest_education || "").replace(/ \(.*$/, ""))}</div>`;
@@ -254,6 +264,7 @@ function renderTable() {
     : sort === "name" ? (a.name || "~").localeCompare(b.name || "~")
     : sort === "experience" ? (a.result?.experience.relevant_years ?? -1) < (b.result?.experience.relevant_years ?? -1) ? 1 : -1
     : sort === "skills" ? cat(b, "skills") - cat(a, "skills")
+    : sort === "ats" ? (b.result?.ats?.score ?? -1) - (a.result?.ats?.score ?? -1)
     : (b.overall ?? -1) - (a.overall ?? -1));
 
   const reviewN = candidates.filter((c) => c.result && c.result.needs_review).length;
@@ -286,6 +297,7 @@ function renderTable() {
       <td>${expTotalCell(r.profile)}</td>
       <td>${certCell(r.profile)}</td>
       <td><div class="score"><b class="s-${b}">${o.toFixed(1)}</b>${meter(o)}<span class="band ${b}">${bandText[b]}</span></div></td>
+      <td class="col-ats">${atsCell(r.ats)}</td>
       <td>${fmtPct(r.categories.skills.applicable ? r.categories.skills.score : null)}</td>
       <td>${expCell}</td>
       <td>${miss || '<span class="none">None</span>'}</td>
@@ -353,6 +365,7 @@ async function showDetail(id) {
         <tr><td>Roles</td><td>${r.profile && r.profile.roles.length ? r.profile.roles.map(esc).join("<br>") : "—"}</td></tr>
         <tr><td>Certifications</td><td>${r.profile && r.profile.certifications.length ? r.profile.certifications.map(esc).join("<br>") : "None listed"}</td></tr>
       </tbody></table></div>
+    <div class="sec"><h3>ATS score — can an Applicant Tracking System read this resume?</h3>${atsHtml(r.ats)}</div>
     <div class="sec"><h3>Score breakdown</h3>${cats}</div>
     <div class="sec"><h3>Why this score</h3><ul class="plain">${r.reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
     <div class="sec"><h3>Requirements</h3>
@@ -367,6 +380,25 @@ async function showDetail(id) {
     ${p.flags && p.flags.length ? `<div class="sec"><h3>Resume parsing notes</h3><ul class="plain">${p.flags.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     <p class="note">${esc(r.disclaimer)}</p>`;
   $("detail").showModal();
+}
+
+function atsHtml(a) {
+  if (!a) return "<p class='none'>Not available — click Save &amp; re-run matching.</p>";
+  const b = atsBand(a.score);
+  const chip = { pass: "ok", warn: "rel", fail: "miss", unknown: "" };
+  const lbl = { pass: "OK", warn: "Improve", fail: "Problem", unknown: "Not checked" };
+  const rows = a.checks.map((c) => `<tr><td>${esc(c.label)}</td><td><span class="chip ${chip[c.status]}">${lbl[c.status]}</span></td>
+      <td><b>${c.status === "unknown" ? "—" : c.points + " / " + c.max}</b></td>
+      <td>${esc(c.detail)}${c.fix ? `<div class="ev">Fix: ${esc(c.fix)}</div>` : ""}</td></tr>`).join("");
+  const k = a.keywords;
+  return `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <div><span class="big s-${b}">${a.score.toFixed(0)}</span><small style="font-size:16px">/100</small></div>
+      <span class="band ${b}">${atsText[b]} ATS readability</span>
+      <small class="none">${a.assessed_points} of 100 points could be assessed${a.layout_assessed ? "" : " (layout needs the original file)"}</small></div>
+    <div class="table-wrap"><table class="dtable"><thead><tr><th>Check</th><th>Result</th><th>Points</th><th>What was found</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${k ? `<p style="margin-top:8px"><b>Job keywords found in the resume:</b> ${k.found} of ${k.total} (${k.pct}%)${k.missing.length ? " · not found: " + k.missing.map(esc).join(", ") : ""}
+      <span class="ev">— only add a keyword if you genuinely have that skill.</span></p>` : ""}
+    <p class="ev">${esc(a.note)} This is separate from the job-match score above.</p>`;
 }
 
 // --------------------------------------------------------------- init
@@ -393,6 +425,7 @@ async function init() {
     $("editor-toggle").textContent = body.hidden ? "Show / edit" : "Hide"; $("editor-toggle").setAttribute("aria-expanded", String(!body.hidden));
   });
   $("w-reset").addEventListener("click", () => document.querySelectorAll("[data-w]").forEach((i) => { i.value = CFG.weights[i.dataset.w]; sumWeights(); }));
+  $("f-ats").addEventListener("change", () => document.querySelector("table").classList.toggle("hide-ats", !$("f-ats").checked));
   ["f-search", "f-missing", "f-min", "f-max", "f-sort", "f-review"].forEach((id) => $(id).addEventListener("input", renderTable));
   $("tbody").addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;

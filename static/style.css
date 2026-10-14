@@ -162,3 +162,11 @@ tbody td:nth-child(9){min-width:230px;max-width:320px}
 tbody td:nth-child(10){min-width:230px}
 tbody td{word-break:normal;overflow-wrap:anywhere}
 .table-wrap{max-height:none}
+
+/* ATS column inserted as 7th column: re-point the width rules */
+tbody td:nth-child(7){min-width:150px}
+tbody td:nth-child(8){min-width:60px}
+tbody td:nth-child(9){min-width:150px}
+tbody td:nth-child(10){min-width:230px;max-width:320px}
+tbody td:nth-child(11){min-width:230px}
+table.hide-ats .col-ats{display:none}

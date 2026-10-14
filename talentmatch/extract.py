@@ -1,7 +1,10 @@
 """Text extraction + upload validation for PDF / DOCX / TXT."""
 import io
+import logging
 import unicodedata
 import zipfile
+
+logging.getLogger("pdfminer").setLevel(logging.ERROR)   # silence harmless font warnings
 
 
 class ExtractionError(Exception):
@@ -118,3 +121,72 @@ def extract_text(data: bytes, ext: str, allowed: set) -> str:
         raise ExtractionError(
             "No readable text found (the file may be a scanned image or empty).")
     return text
+
+
+# ---------------------------------------------------------------- file inspection (for ATS checks)
+def _pdf_columns(page) -> bool:
+    """True when the page looks multi-column: many text lines have a gap at the SAME x position with
+    several words on both sides. (Right-aligned dates leave only 1-3 words on the right, so they pass.)"""
+    words = page.extract_words(x_tolerance=2, y_tolerance=3) or []
+    if len(words) < 40:
+        return False
+    width = float(page.width)
+    lines = {}
+    for w in words:
+        lines.setdefault(round(w["top"] / 4), []).append(w)
+    centres, total = [], 0
+    for ws in lines.values():
+        if len(ws) < 8:
+            continue
+        total += 1
+        ws.sort(key=lambda w: w["x0"])
+        best = max(range(1, len(ws)), key=lambda i: ws[i]["x0"] - ws[i - 1]["x1"])
+        gap = ws[best]["x0"] - ws[best - 1]["x1"]
+        left, right = best, len(ws) - best
+        mid = (ws[best]["x0"] + ws[best - 1]["x1"]) / 2
+        if gap > width * 0.03 and left >= 4 and right >= 4 and 0.25 * width < mid < 0.75 * width:
+            centres.append(mid)
+    if total < 6 or len(centres) < max(5, 0.4 * total):
+        return False
+    centres.sort()
+    median = centres[len(centres) // 2]
+    return sum(1 for c in centres if abs(c - median) < width * 0.04) >= max(5, 0.4 * total)
+
+
+def inspect_file(data: bytes, ext: str) -> dict:
+    """Layout facts that affect ATS parsing. Never raises; missing facts stay None."""
+    import re
+    info = {"ext": ext.lower(), "pages": None, "tables": None, "images": None, "multi_column": None,
+            "textboxes": None, "header_footer_contact": None, "size_kb": round(len(data) / 1024, 1)}
+    try:
+        if ext.lower() == ".pdf":
+            import pdfplumber
+            tables = images = 0
+            cols = False
+            with pdfplumber.open(io.BytesIO(data)) as pdf:
+                info["pages"] = len(pdf.pages)
+                for page in pdf.pages[:4]:
+                    tables += len(page.find_tables() or [])
+                    images += len(page.images or [])
+                    cols = cols or _pdf_columns(page)
+            info.update(tables=tables, images=images, multi_column=cols, textboxes=0,
+                        header_footer_contact=False)
+        elif ext.lower() == ".docx":
+            import docx
+            d = docx.Document(io.BytesIO(data))
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                body = z.read("word/document.xml").decode("utf8", "ignore")
+                app = z.read("docProps/app.xml").decode("utf8", "ignore") if "docProps/app.xml" in z.namelist() else ""
+            m = re.search(r"<Pages>(\d+)</Pages>", app)
+            hf = False
+            for sec in d.sections:
+                for part in (sec.header, sec.footer):
+                    t = " ".join(p.text for p in part.paragraphs)
+                    if re.search(r"@|\+?\d[\d\s().-]{8,}\d", t):
+                        hf = True
+            info.update(pages=int(m.group(1)) if m else None, tables=len(d.tables),
+                        images=len(d.inline_shapes), multi_column=bool(re.search(r'<w:cols [^>]*w:num="[2-9]"', body)),
+                        textboxes=body.count("<w:txbxContent"), header_footer_contact=hf)
+    except Exception:
+        pass
+    return info

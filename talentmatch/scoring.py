@@ -13,6 +13,7 @@ overall = 100 * sum(w_i * s_i) / sum(w_i)    over categories that APPLY
 import re
 
 from . import skills as sk
+from .ats import ats_report
 from .config import CATEGORY_LABELS, DEFAULT_EXPERIENCE_COUNTING, normalize_weights
 from .textutil import content_stems, edu_levels_in, EDU_LEVELS
 
@@ -506,6 +507,7 @@ def score_candidate(job: dict, weights: dict, resume: dict) -> dict:
         "missing_mandatory": [i["display"] for i in missing_m],
         "matched_preferred": [i["display"] for i in matched_p],
         "missing_preferred": [i["display"] for i in missing_p],
+        "ats": ats_report(resume, skill_items),
         "profile": resume.get("profile"),
         "experience": exp_info,
         "education": edu_info,

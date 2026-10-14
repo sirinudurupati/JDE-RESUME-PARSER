@@ -22,3 +22,11 @@ are excluded and shown as "not scored"; missing resume evidence scores 0 and is 
 TM_PORT (8080), TM_HOST (127.0.0.1), TM_DATA_DIR, TM_MAX_FILE_MB (10), TM_MAX_FILES_PER_REQUEST (100).
 Data (SQLite + uploaded files) lives in `data/`. No resume text leaves the machine; no external AI is used.
 There is no login: keep it on localhost or put it behind your own authentication.
+
+## ATS score
+Every candidate also gets an **ATS score (0-100)**: how reliably an Applicant Tracking System can *read* the
+resume (separate from the job-match score). It is an explainable checklist: readable text 15, contact details 15,
+standard section headings 20, clear dates 10, single column 8, no tables 6, no text boxes/graphics 3,
+contact not in header 3, clean characters 10, length 5, measurable results 5. Bands: 80+ Good, 60-79 Fair, <60 Poor.
+Checks that can't be assessed (original file missing) are left out, not given full marks.
+Each ATS is proprietary, so this is an estimate of parse-friendliness, not a copy of any one product.

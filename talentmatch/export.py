@@ -8,7 +8,7 @@ from openpyxl.utils import get_column_letter
 
 HEADERS = ["Rank", "Candidate", "Email", "Phone", "Highest education", "Graduation year",
            "Total experience (yrs, dated)", "Stated experience (months, undated)", "Certifications",
-           "Overall match (0-100)", "Skills %",
+           "Overall match (0-100)", "ATS score (0-100)", "ATS issues", "Skills %",
            "Relevant experience %", "Education %", "Responsibilities %", "Certifications %",
            "Total experience (months)", "Relevant experience (months)", "Required experience (months)",
            "Missing experience (months)", "Matched mandatory",
@@ -41,7 +41,8 @@ def rows_for(candidates):
             (r.get("profile") or {}).get("experience_years", ""),
             (r.get("profile") or {}).get("stated_months", ""),
             "; ".join((r.get("profile") or {}).get("certifications", [])),
-            r["overall"], _cat(r, "skills"), _cat(r, "experience"), _cat(r, "education"),
+            r["overall"], (r.get("ats") or {}).get("score", ""), "; ".join((r.get("ats") or {}).get("issues", [])),
+            _cat(r, "skills"), _cat(r, "experience"), _cat(r, "education"),
             _cat(r, "responsibilities"), _cat(r, "certifications"),
             exp.get("total_months", ""), exp.get("relevant_months", ""),
             exp.get("required_months") or "n/a",

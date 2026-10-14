@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 
 from . import config, storage
-from .extract import ExtractionError, extract_text
+from .extract import ExtractionError, extract_text, inspect_file
 from .jde_parser import parse_jde
 from .resume_parser import parse_resume
 from .scoring import score_candidate
@@ -125,6 +125,7 @@ def ingest_resume(job_id, filename, data):
                 "message": f"Identical file already uploaded as '{dup['filename']}'."}
     try:
         parsed = parse_resume(text)
+        parsed["file_info"] = inspect_file(data, _ext(filename))
     except Exception:
         return {"filename": display, "status": "error", "message": "Resume could not be parsed."}
     note = None
@@ -154,14 +155,18 @@ def rematch_job(job_id):
         old = c["parsed"]
         dup_flags = [f for f in old.get("flags", []) if "possible duplicate" in f.lower()]
         text = old["text"]
+        file_info = old.get("file_info")
         try:                         # re-read the saved file so reader improvements apply too
             path = config.UPLOAD_DIR / c["stored_name"]
             if path.exists():
-                text = extract_text(path.read_bytes(), path.suffix, config.RESUME_EXTS)
+                raw = path.read_bytes()
+                text = extract_text(raw, path.suffix, config.RESUME_EXTS)
+                file_info = inspect_file(raw, path.suffix)
         except Exception:
             text = old["text"]
         try:                         # re-parse so parser improvements apply to saved resumes too
             parsed = parse_resume(text)
+            parsed["file_info"] = file_info
             parsed["flags"] = parsed.get("flags", []) + dup_flags
             storage.update_parsed(c["id"], parsed)
         except Exception:
