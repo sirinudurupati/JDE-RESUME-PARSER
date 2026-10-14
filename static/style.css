@@ -22,7 +22,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",sys
 .sub{font-size:13px;color:var(--muted)}
 
 .wrap{max-width:1500px;margin:0 auto;padding:22px 28px 60px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px}
 .stat .n{font-size:30px;font-weight:800;color:var(--navy);line-height:1.1}
 .stat .l{font-size:13px;color:var(--muted)}
@@ -170,3 +170,30 @@ tbody td:nth-child(9){min-width:150px}
 tbody td:nth-child(10){min-width:230px;max-width:320px}
 tbody td:nth-child(11){min-width:230px}
 table.hide-ats .col-ats{display:none}
+
+.atsmeta{margin-top:4px;white-space:nowrap;font-size:12px}
+.risk{margin-left:8px;font-size:12px;font-weight:700;color:var(--low);cursor:help}
+
+/* ---- candidate ranking cards (replaces the wide table: no sideways scrolling) ---- */
+.grid > *, .main, .side, .card{min-width:0}
+.cards{display:flex;flex-direction:column;gap:14px}
+.cand{border:1px solid var(--line);border-radius:12px;padding:14px 18px;background:#fff}
+.cand:hover{border-color:#b9c7da;box-shadow:0 2px 8px rgba(16,24,40,.06)}
+.cand-head{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.rank{width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;font-weight:800;display:grid;place-items:center;flex:none}
+.who{flex:1;min-width:200px}
+.cand .cname{font-size:17px}
+.cand-actions{display:flex;gap:6px;flex-wrap:wrap}
+.scores{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:12px 0}
+.sbox{background:#f8fafd;border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.sbox .sl{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.sbox .score b{font-size:26px}
+.sbox .ss{font-size:12.5px;color:var(--muted);margin-top:4px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px 18px;margin:0}
+.fact dt{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+.fact dd{margin:0;font-size:14px;overflow-wrap:anywhere}
+.fact.wide{grid-column:1/-1}
+.fact .sub{font-size:12.5px;color:var(--muted)}
+.cards.hide-ats .ats-box{display:none}
+/* upload progress text must wrap, never cut off */
+.ptext,.results-log div,.msg{white-space:normal;overflow-wrap:anywhere}

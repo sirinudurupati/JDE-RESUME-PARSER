@@ -45,7 +45,6 @@ function wireDrop(zone, input, onFiles) {
 async function loadJobs(selectId) {
   const data = await api("/api/jobs");
   jobs = data.jobs;
-  $("st-all").textContent = data.counts.applicants;
   $("pool-n").textContent = data.counts.distinct_resumes;
   $("st-jobs").textContent = jobs.length;
   const sel = $("job-select");
@@ -123,9 +122,13 @@ function fillEditor(job) {
   fl.hidden = !flags.length;
   fl.innerHTML = flags.length ? `<b>Please review before matching — some items could not be extracted confidently:</b><ul>${flags.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>` : "";
   $("editor-msg").textContent = job.reviewed ? "" : "Not yet reviewed - check the fields, then save.";
-  $("editor-body").hidden = job.reviewed;
-  $("editor-toggle").textContent = job.reviewed ? "Show / edit" : "Hide";
-  $("editor-toggle").setAttribute("aria-expanded", String(!job.reviewed));
+  // keep the form collapsed so the candidate ranking is what you see first
+  $("editor-body").hidden = true;
+  $("editor-toggle").textContent = "Show / edit";
+  $("editor-toggle").setAttribute("aria-expanded", "false");
+  const nFlags = (job.reviewed ? [] : r.flags || []).length;
+  $("editor-title").innerHTML = job.reviewed ? "Job requirements"
+    : `Job requirements <span class="chip rel" style="margin-left:8px">${nFlags} item${nFlags === 1 ? "" : "s"} to review</span>`;
 }
 function sumWeights() {
   const t = [...document.querySelectorAll("[data-w]")].reduce((a, i) => a + (parseFloat(i.value) || 0), 0);
@@ -218,8 +221,11 @@ function atsCell(a) {
   if (!a) return `<span class="none">n/a</span>`;
   const b = atsBand(a.score);
   const tip = a.issues.length ? a.issues.join(" | ") : "No ATS problems found";
+  const n = a.knockouts ? a.knockouts.length : 0;
   return `<div class="score" title="${esc(tip)}"><b class="s-${b}">${a.score.toFixed(0)}</b>${meter(a.score)}</div>` +
-    `<span class="band ${b}">${atsText[b]}</span>` + (a.knockouts && a.knockouts.length ? ` <span class="chip miss" title="${esc(a.knockouts.join(" | "))}">${a.knockouts.length} knockout risk</span>` : "") + (a.layout_assessed ? "" : ` <small class="none" title="Original file unavailable">layout not checked</small>`);
+    `<div class="atsmeta"><span class="band ${b}">${atsText[b]}</span>` +
+    (n ? `<span class="risk" title="Knockout risks (an enterprise ATS may auto-filter): ${esc(a.knockouts.join(" | "))}">⚠ ${n} risk${n > 1 ? "s" : ""}</span>` : "") +
+    (a.layout_assessed ? "" : `<span class="none" title="Original file unavailable"> · layout not checked</span>`) + `</div>`;
 }
 
 function gradCell(p) {
@@ -271,43 +277,70 @@ function renderTable() {
     : (b.overall ?? -1) - (a.overall ?? -1));
 
   const reviewN = candidates.filter((c) => c.result && c.result.needs_review).length;
-  $("st-job").textContent = candidates.length;
-  $("st-review").textContent = reviewN;
+  const jb = activeJob();
+  const jt = jb ? (jb.title.length > 28 ? jb.title.slice(0, 26) + "…" : jb.title) : "";
+  $("st-job").textContent = jb ? candidates.length : 0;
+  $("st-review").textContent = jb ? reviewN : 0;
+  $("st-job-l").textContent = jb ? `Resumes uploaded · ${jt}` : "Resumes uploaded";
+  $("st-review-l").textContent = jb ? `Need manual review · ${jt}` : "Need manual review";
   $("f-count").textContent = candidates.length ? `Showing ${rows.length} of ${candidates.length} candidates` : "";
   $("empty").hidden = rows.length > 0;
   $("empty").textContent = candidates.length ? "No candidates match the current filters." :
     (activeId ? "No resumes yet. Upload resumes to see the ranked results." : "Upload a job description, then add resumes to see the ranked results.");
-  $("tbody").innerHTML = rows.map((c) => {
-    const r = c.result; if (!r) return "";
-    const o = c.overall, b = band(o);
-    const e = r.experience;
-    const expCell = e.required_months
-      ? `<b>${e.relevant_months}</b> / ${e.required_months} mo <span class="band ${band(r.categories.experience.score)}">${fmtPct(r.categories.experience.score)}</span>` +
-        (e.missing_months ? `<div class="cfile">${e.missing_months} months short</div>` : `<div class="cfile">requirement met</div>`)
-      : `${e.relevant_months} mo relevant<div class="cfile">job sets no minimum</div>`;
-    const chips = [
-      ...r.missing_mandatory.map((m) => `<span class="chip miss">${esc(m)}</span>`),
-      ...r.related_mandatory.map((m) => `<span class="chip rel" title="Related experience only">${esc(m)} (related)</span>`),
-    ];
-    const miss = chips.slice(0, 4).join("") +
-      (chips.length > 4 ? `<span class="chip" title="${esc([...r.missing_mandatory, ...r.related_mandatory].join(", "))}">+${chips.length - 4} more</span>` : "");
-    return `<tr>
-      <td>${rank.get(c.id)}</td>
-      <td><div class="cname">${esc(c.name || "(name not detected)")}</div><div class="cfile">${esc(c.filename)}</div>
+  $("cards").innerHTML = rows.map((c) => candidateCard(c, rank.get(c.id))).join("");
+}
+
+function fact(label, value, wide) {
+  return `<div class="fact${wide ? " wide" : ""}"><dt>${label}</dt><dd>${value}</dd></div>`;
+}
+
+function candidateCard(c, rank) {
+  const r = c.result; if (!r) return "";
+  const o = c.overall, b = band(o);
+  const e = r.experience, p = r.profile || {}, m = r.ats_mnc;
+  const expRel = e.required_months
+    ? `<b>${e.relevant_months}</b> of ${e.required_months} months required <span class="band ${band(r.categories.experience.score)}">${fmtPct(r.categories.experience.score)}</span>` +
+      `<div class="sub">${e.missing_months ? e.missing_months + " months short" : "requirement met"}</div>`
+    : `<b>${e.relevant_months}</b> months relevant<div class="sub">job sets no minimum</div>`;
+  const certs = (p.certifications || []);
+  const certHtml = certs.length
+    ? certs.slice(0, 3).map((x) => `<div class="certline">${esc(x.length > 80 ? x.slice(0, 77) + "…" : x)}</div>`).join("") +
+      (certs.length > 3 ? `<div class="sub">+${certs.length - 3} more (see Details)</div>` : "")
+    : `<span class="none">None listed</span>`;
+  const chips = [
+    ...r.missing_mandatory.map((x) => `<span class="chip miss">${esc(x)}</span>`),
+    ...r.related_mandatory.map((x) => `<span class="chip rel" title="Related experience only">${esc(x)} (related)</span>`),
+  ];
+  const missing = chips.length
+    ? chips.slice(0, 8).join("") + (chips.length > 8 ? `<span class="chip" title="${esc([...r.missing_mandatory, ...r.related_mandatory].join(", "))}">+${chips.length - 8} more</span>` : "")
+    : `<span class="chip ok">None - all mandatory skills found</span>`;
+  const ats = m ? `<div class="sbox ats-box"><div class="sl">ATS score (MNC)</div>${atsCell(m)}
+      <div class="ss">Parsing ${m.parse_score}/50 · Keywords ${m.keyword_score === null ? "n/a" : m.keyword_score + "/50"}</div></div>` : "";
+  return `<article class="cand">
+    <div class="cand-head">
+      <div class="rank" aria-label="Rank ${rank}">${rank}</div>
+      <div class="who"><div class="cname">${esc(c.name || "(name not detected)")}</div><div class="cfile">${esc(c.filename)}</div>
         ${r.needs_review ? `<span class="chip rev" title="${esc(r.review_reasons.join('; '))}">Needs manual review</span>` : ""}
-        ${c.stale ? `<span class="chip rel">Re-run needed</span>` : ""}</td>
-      <td>${gradCell(r.profile)}</td>
-      <td>${expTotalCell(r.profile)}</td>
-      <td>${certCell(r.profile)}</td>
-      <td><div class="score"><b class="s-${b}">${o.toFixed(1)}</b>${meter(o)}<span class="band ${b}">${bandText[b]}</span></div></td>
-      <td class="col-ats">${atsCell(r.ats_mnc)}</td>
-      <td>${fmtPct(r.categories.skills.applicable ? r.categories.skills.score : null)}</td>
-      <td>${expCell}</td>
-      <td>${miss || '<span class="none">None</span>'}</td>
-      <td class="acts"><button class="btn ghost small" data-act="detail" data-id="${c.id}">Details</button>
+        ${c.stale ? `<span class="chip rel">Re-run needed</span>` : ""}</div>
+      <div class="cand-actions"><button class="btn ghost small" data-act="detail" data-id="${c.id}">Details</button>
         <a class="btn ghost small" href="/api/candidates/${c.id}/file" target="_blank" rel="noopener">Resume</a>
-        <button class="btn danger ghost small" data-act="del" data-id="${c.id}" aria-label="Delete ${esc(c.name || c.filename)}">Delete</button></td></tr>`;
-  }).join("");
+        <button class="btn danger ghost small" data-act="del" data-id="${c.id}" aria-label="Delete ${esc(c.name || c.filename)}">Delete</button></div>
+    </div>
+    <div class="scores">
+      <div class="sbox"><div class="sl">Overall job match</div>
+        <div class="score"><b class="s-${b}">${o.toFixed(1)}</b>${meter(o)}</div>
+        <div class="atsmeta"><span class="band ${b}">${bandText[b]}</span></div>
+        <div class="ss">Skills ${fmtPct(r.categories.skills.applicable ? r.categories.skills.score : null)}</div></div>
+      ${ats}
+    </div>
+    <dl class="facts">
+      ${fact("Year passed out", gradCell(p))}
+      ${fact("Work experience (all roles)", expTotalCell(p))}
+      ${fact("Relevant to this job", expRel)}
+      ${fact("Certifications", certHtml)}
+      ${fact("Mandatory skills missing", missing, true)}
+    </dl>
+  </article>`;
 }
 
 // ------------------------------------------------------------- detail
@@ -460,9 +493,9 @@ async function init() {
     $("editor-toggle").textContent = body.hidden ? "Show / edit" : "Hide"; $("editor-toggle").setAttribute("aria-expanded", String(!body.hidden));
   });
   $("w-reset").addEventListener("click", () => document.querySelectorAll("[data-w]").forEach((i) => { i.value = CFG.weights[i.dataset.w]; sumWeights(); }));
-  $("f-ats").addEventListener("change", () => document.querySelector("table").classList.toggle("hide-ats", !$("f-ats").checked));
+  $("f-ats").addEventListener("change", () => $("cards").classList.toggle("hide-ats", !$("f-ats").checked));
   ["f-search", "f-missing", "f-min", "f-max", "f-sort", "f-review"].forEach((id) => $(id).addEventListener("input", renderTable));
-  $("tbody").addEventListener("click", async (e) => {
+  $("cards").addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-act]"); if (!btn) return;
     const id = +btn.dataset.id;
     if (btn.dataset.act === "detail") showDetail(id).catch((err) => toast(err.message));
@@ -489,8 +522,7 @@ async function refreshStats() {
     const data = await api("/api/jobs");
     jobs = data.jobs;
     $("st-jobs").textContent = jobs.length;
-    $("st-all").textContent = data.counts.applicants;
-    const sel = $("job-select");
+      const sel = $("job-select");
     [...sel.options].forEach((o) => {
       const j = jobs.find((x) => String(x.id) === o.value);
       if (j) o.textContent = `${j.title} (${j.candidate_count})`;

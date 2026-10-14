@@ -27,22 +27,18 @@
   </header>
 
   <main class="wrap">
-    <section class="stats" aria-label="Summary">
+    <section class="stats" aria-label="Summary for the selected job">
       <div class="stat">
         <div class="n" id="st-jobs">0</div>
-        <div class="l">Job descriptions</div>
-      </div>
-      <div class="stat">
-        <div class="n" id="st-all">0</div>
-        <div class="l">Applicants (all jobs)</div>
+        <div class="l">Job descriptions saved</div>
       </div>
       <div class="stat">
         <div class="n" id="st-job">0</div>
-        <div class="l">Applicants · active job</div>
+        <div class="l" id="st-job-l">Resumes uploaded</div>
       </div>
       <div class="stat">
         <div class="n" id="st-review">0</div>
-        <div class="l">Need manual review · active job</div>
+        <div class="l" id="st-review-l">Need manual review</div>
       </div>
     </section>
 
@@ -101,7 +97,7 @@
       <section class="main">
         <section class="card" id="editor-card" hidden>
           <div class="card-head">
-            <h2>Review job requirements</h2>
+            <h2 id="editor-title">Review job requirements</h2>
             <button class="btn ghost" id="editor-reextract"
               title="Re-read the uploaded document with the latest parser (discards your edits)">Re-extract from
               document</button>
@@ -192,26 +188,7 @@
           <label class="check"><input type="checkbox" id="f-ats" checked> Show ATS score</label>
           </div>
           <div class="count" id="f-count" role="status" aria-live="polite"></div>
-          <div class="table-wrap">
-            <table id="tbl">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">Candidate</th>
-                  <th scope="col">Passed out</th>
-                  <th scope="col">Work experience</th>
-                  <th scope="col">Certifications</th>
-                  <th scope="col">Overall match</th>
-              <th scope="col" class="col-ats" title="MNC / enterprise-ATS model: 50 = how cleanly the resume parses, 50 = exact keyword match with the job. Separate from the job-match score.">ATS score (MNC)</th>
-                  <th scope="col">Skills</th>
-                  <th scope="col">Relevant to job</th>
-                  <th scope="col">Missing mandatory</th>
-                  <th scope="col"><span class="sr">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody id="tbody"></tbody>
-            </table>
-          </div>
+          <div id="cards" class="cards"></div>
           <div class="empty" id="empty">Upload a job description, then add resumes to see the ranked results.</div>
         </section>
       </section>
