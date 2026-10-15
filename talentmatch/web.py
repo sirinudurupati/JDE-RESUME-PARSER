@@ -1,11 +1,12 @@
 """Flask app factory + JSON API + the single dashboard page."""
 import hmac
+import io
 import os
 from urllib.parse import urlparse
 
 from flask import Flask, Response, abort, jsonify, render_template, request, send_file
 
-from . import config, export, service, storage
+from . import config, export, filestore, service, storage
 from .config import normalize_weights
 from .extract import ExtractionError
 
@@ -231,11 +232,13 @@ def create_app():
         c = storage.get_candidate(cid)
         if not c:
             abort(404)
-        path = (config.UPLOAD_DIR / c["stored_name"]).resolve()
-        if config.UPLOAD_DIR.resolve() not in path.parents or not path.exists():
+        raw = filestore.get(c["stored_name"])
+        if raw is None:
             abort(404)
         inline = c["stored_name"].endswith(".pdf") and request.args.get("download") != "1"
-        return send_file(path, as_attachment=not inline, download_name=c["filename"])
+        return send_file(io.BytesIO(raw), as_attachment=not inline, download_name=c["filename"],
+                         mimetype="application/pdf" if c["stored_name"].endswith(".pdf")
+                         else "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
     @app.delete("/api/candidates/<int:cid>")
     def api_candidate_delete(cid):

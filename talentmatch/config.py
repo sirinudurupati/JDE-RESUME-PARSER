@@ -10,6 +10,22 @@ DB_PATH = DATA_DIR / "talentmatch.db"
 HOST = os.environ.get("TM_HOST", "127.0.0.1")   # localhost only by default (no login system)
 PORT = int(os.environ.get("TM_PORT", "8080"))
 
+
+
+def database_url():
+    """Postgres connection string (Supabase: Project Settings > Database). Empty -> local SQLite."""
+    return os.environ.get("DATABASE_URL", "").strip()
+
+
+def supabase_storage():
+    """(base_url, service_key, bucket) when resumes should live in Supabase Storage, else None."""
+    url = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    if not (url and key):
+        return None
+    return url, key, os.environ.get("SUPABASE_BUCKET", "resumes").strip() or "resumes"
+
+
 MAX_FILE_MB = int(os.environ.get("TM_MAX_FILE_MB", "10"))
 MAX_FILES_PER_REQUEST = int(os.environ.get("TM_MAX_FILES_PER_REQUEST", "100"))
 MAX_REQUEST_MB = int(os.environ.get("TM_MAX_REQUEST_MB", "400"))

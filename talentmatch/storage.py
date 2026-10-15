@@ -1,4 +1,7 @@
-"""SQLite persistence (stdlib only). One short-lived connection per call."""
+"""Persistence. SQLite by default (stdlib only); Postgres (e.g. Supabase) when DATABASE_URL is set.
+
+Queries are written once with `?` placeholders; the Postgres path rewrites them to `%s`.
+One short-lived connection per call."""
 import json
 import sqlite3
 import time
@@ -40,24 +43,108 @@ CREATE TABLE IF NOT EXISTS results(
 CREATE INDEX IF NOT EXISTS idx_cand_job ON candidates(job_id);
 """
 
+# Same tables for Postgres. RLS is switched on with no policies so that Supabase's public API
+# (anon key) can never read candidate data; the app connects as the table owner, which bypasses RLS.
+PG_SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs(
+  id BIGSERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  requirements TEXT NOT NULL,
+  weights TEXT NOT NULL,
+  source_name TEXT,
+  reviewed INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL DEFAULT 1,
+  created DOUBLE PRECISION NOT NULL,
+  updated DOUBLE PRECISION NOT NULL
+);
+CREATE TABLE IF NOT EXISTS candidates(
+  id BIGSERIAL PRIMARY KEY,
+  job_id BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  name TEXT, email TEXT, phone TEXT,
+  filename TEXT NOT NULL,
+  stored_name TEXT NOT NULL,
+  file_hash TEXT NOT NULL,
+  parsed TEXT NOT NULL,
+  created DOUBLE PRECISION NOT NULL,
+  UNIQUE(job_id, file_hash)
+);
+CREATE TABLE IF NOT EXISTS results(
+  candidate_id BIGINT PRIMARY KEY REFERENCES candidates(id) ON DELETE CASCADE,
+  job_id BIGINT NOT NULL,
+  job_version INTEGER NOT NULL,
+  overall DOUBLE PRECISION NOT NULL,
+  detail TEXT NOT NULL,
+  matched_at DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cand_job ON candidates(job_id);
+ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE candidates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE results ENABLE ROW LEVEL SECURITY;
+"""
+
+
+class _PgConn:
+    """Gives a psycopg connection the tiny slice of the sqlite3 API this module uses."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=()):
+        return self.conn.execute(sql.replace("?", "%s"), params)
+
+    def insert(self, sql, params):
+        return self.execute(sql + " RETURNING id", params).fetchone()["id"]
+
+
+class _LiteConn:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=()):
+        return self.conn.execute(sql, params)
+
+    def insert(self, sql, params):
+        return self.conn.execute(sql, params).lastrowid
+
 
 @contextmanager
 def db():
+    url = config.database_url()
+    if url:
+        import psycopg
+        from psycopg.rows import dict_row
+        # prepare_threshold=None: Supabase's pooler (transaction mode) rejects prepared statements
+        conn = psycopg.connect(url, row_factory=dict_row, prepare_threshold=None, connect_timeout=15)
+        try:
+            yield _PgConn(conn)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+        return
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(config.DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     try:
-        yield conn
+        yield _LiteConn(conn)
         conn.commit()
     finally:
         conn.close()
 
 
 def init():
-    config.UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    from . import filestore
+    filestore.init()
     with db() as c:
-        c.executescript(SCHEMA)
+        if config.database_url():
+            for stmt in PG_SCHEMA.split(";"):
+                if stmt.strip():
+                    c.execute(stmt)
+        else:
+            c.conn.executescript(SCHEMA)
 
 
 # ----------------------------------------------------------------- jobs
@@ -72,11 +159,10 @@ def _job(row, with_counts=None):
 def create_job(title, requirements, weights, source_name):
     now = time.time()
     with db() as c:
-        cur = c.execute(
+        return c.insert(
             "INSERT INTO jobs(title,requirements,weights,source_name,reviewed,version,created,updated)"
             " VALUES(?,?,?,?,0,1,?,?)",
             (title, json.dumps(requirements), json.dumps(weights), source_name, now, now))
-        return cur.lastrowid
 
 
 def get_job(job_id):
@@ -117,12 +203,11 @@ def delete_job(job_id):
 # ----------------------------------------------------------- candidates
 def add_candidate(job_id, parsed, filename, stored_name, file_hash):
     with db() as c:
-        cur = c.execute(
+        return c.insert(
             "INSERT INTO candidates(job_id,name,email,phone,filename,stored_name,file_hash,parsed,created)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
             (job_id, parsed.get("name"), parsed.get("email"), parsed.get("phone"), filename,
              stored_name, file_hash, json.dumps(parsed), time.time()))
-        return cur.lastrowid
 
 
 def update_parsed(cid, parsed):
@@ -175,8 +260,10 @@ def list_candidates(job_id, full=False):
 
 def save_result(candidate_id, job_id, job_version, result):
     with db() as c:
-        c.execute("INSERT OR REPLACE INTO results(candidate_id,job_id,job_version,overall,detail,matched_at)"
-                  " VALUES(?,?,?,?,?,?)",
+        c.execute("INSERT INTO results(candidate_id,job_id,job_version,overall,detail,matched_at)"
+                  " VALUES(?,?,?,?,?,?) ON CONFLICT(candidate_id) DO UPDATE SET job_id=excluded.job_id,"
+                  " job_version=excluded.job_version, overall=excluded.overall, detail=excluded.detail,"
+                  " matched_at=excluded.matched_at",
                   (candidate_id, job_id, job_version, result["overall"], json.dumps(result), time.time()))
 
 
@@ -191,9 +278,9 @@ def delete_candidate(cid):
 
 def counts():
     with db() as c:
-        j = c.execute("SELECT COUNT(*) n FROM jobs").fetchone()["n"]
-        a = c.execute("SELECT COUNT(*) n FROM candidates").fetchone()["n"]
-        d = c.execute("SELECT COUNT(DISTINCT file_hash) n FROM candidates").fetchone()["n"]
+        j = c.execute("SELECT COUNT(*) AS n FROM jobs").fetchone()["n"]
+        a = c.execute("SELECT COUNT(*) AS n FROM candidates").fetchone()["n"]
+        d = c.execute("SELECT COUNT(DISTINCT file_hash) AS n FROM candidates").fetchone()["n"]
     return {"jobs": j, "applicants": a, "distinct_resumes": d}
 
 

@@ -41,18 +41,26 @@ may auto-filter on (missing mandatory keyword/certification, experience or educa
 Not-applicable checks (e.g. no work history for a fresher) are left out, not penalised.
 The earlier plain readability score is still shown in the details.
 
-## Deploying (Render or Railway) - not Vercel
-Vercel's serverless functions have no permanent disk and a 4.5 MB request limit, so this app (SQLite + uploaded resumes)
-needs a host with a persistent disk. Production settings (environment variables):
+## Deploying with Supabase
+Supabase provides the **database (Postgres) and file storage**; it cannot run a Flask server, so the app itself runs on
+a web host (Render's free plan is enough - no disk needed) and keeps all data in your Supabase project.
+
+1. Create a Supabase project. Copy **Project Settings > Database > Connection string** (the *Transaction pooler* URI,
+   port 6543) into `DATABASE_URL`, and **Project Settings > API** `Project URL` / `service_role` key into
+   `SUPABASE_URL` / `SUPABASE_SERVICE_KEY`. Never put the service key in the repo or the browser.
+2. Tables are created automatically on first start (row-level security is on, so the public API key can't read
+   candidates). The private `resumes` bucket is created automatically too (`SUPABASE_BUCKET` to rename it).
+   [supabase/schema.sql](supabase/schema.sql) is the same SQL if you prefer to run it yourself.
+3. **Render:** New + > Blueprint > choose the repo/branch; enter `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`
+   and `TM_PASSWORD`. **Railway:** same variables plus `TM_ENV=production`.
 
 | Variable | Value |
 |---|---|
 | `TM_ENV` | `production` (the app refuses to start without `TM_PASSWORD`) |
 | `TM_PASSWORD` | the login password (user name is `TM_USER`, default `hr`) |
-| `TM_DATA_DIR` | folder on the persistent disk, e.g. `/var/data` |
+| `DATABASE_URL` | Supabase Postgres URI. Unset -> local SQLite in `TM_DATA_DIR` |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | resumes go to Supabase Storage. Unset -> local `TM_DATA_DIR/uploads` |
 
 Start command: `gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 180` (also in `Procfile`).
-Health check: `/healthz`. **Render:** New + > Blueprint > choose the repo/branch (`render.yaml` does the rest) and enter
-`TM_PASSWORD`. **Railway:** New Project > Deploy from GitHub, add a Volume mounted at `/data`, set `TM_DATA_DIR=/data`,
-`TM_ENV=production`, `TM_PASSWORD`. Without a persistent disk, every redeploy erases all candidates and resumes.
+Health check: `/healthz`. Not Vercel: its 4.5 MB request limit is too small for resume batches.
 Development/tests: `pip install -r requirements-dev.txt`.

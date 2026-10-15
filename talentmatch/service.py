@@ -4,7 +4,7 @@ import os
 import uuid
 from pathlib import Path
 
-from . import config, storage
+from . import config, filestore, storage
 from .extract import ExtractionError, extract_text, inspect_file
 from .jde_parser import parse_jde
 from .resume_parser import parse_resume
@@ -134,7 +134,7 @@ def ingest_resume(job_id, filename, data):
         note = f"Same email as existing candidate '{same['name'] or same['filename']}' - possible duplicate."
         parsed["flags"] = parsed.get("flags", []) + [note]
     stored = uuid.uuid4().hex + _ext(filename)
-    (config.UPLOAD_DIR / stored).write_bytes(data)
+    filestore.put(stored, data)
     cid = storage.add_candidate(job_id, parsed, display, stored, digest)
     job = storage.get_job(job_id)
     result = score_candidate(job["requirements"], job["weights"], parsed)
@@ -157,11 +157,11 @@ def rematch_job(job_id):
         text = old["text"]
         file_info = old.get("file_info")
         try:                         # re-read the saved file so reader improvements apply too
-            path = config.UPLOAD_DIR / c["stored_name"]
-            if path.exists():
-                raw = path.read_bytes()
-                text = extract_text(raw, path.suffix, config.RESUME_EXTS)
-                file_info = inspect_file(raw, path.suffix)
+            raw = filestore.get(c["stored_name"])
+            if raw is not None:
+                suffix = os.path.splitext(c["stored_name"])[1]
+                text = extract_text(raw, suffix, config.RESUME_EXTS)
+                file_info = inspect_file(raw, suffix)
         except Exception:
             text = old["text"]
         try:                         # re-parse so parser improvements apply to saved resumes too
@@ -187,16 +187,15 @@ def carry_over_resumes(job_id):
     results, and deleting a candidate in one job never touches another job's copy.
     -> number of resumes added."""
     import json
-    import shutil
     added = 0
     for row in storage.pool_candidates(job_id):
         if storage.find_by_hash(job_id, row["file_hash"]):
             continue                                   # already in this job
-        src = config.UPLOAD_DIR / row["stored_name"]
-        if not src.exists():
+        raw = filestore.get(row["stored_name"])
+        if raw is None:
             continue                                   # file gone: cannot offer it for preview/re-read
-        stored = uuid.uuid4().hex + src.suffix
-        shutil.copyfile(src, config.UPLOAD_DIR / stored)
+        stored = uuid.uuid4().hex + os.path.splitext(row["stored_name"])[1]
+        filestore.put(stored, raw)
         storage.add_candidate(job_id, json.loads(row["parsed"]), row["filename"], stored, row["file_hash"])
         added += 1
     if added:
@@ -205,8 +204,4 @@ def carry_over_resumes(job_id):
 
 
 def remove_file(stored_name):
-    if not stored_name:
-        return
-    p = (config.UPLOAD_DIR / stored_name).resolve()
-    if config.UPLOAD_DIR.resolve() in p.parents and p.exists():
-        p.unlink()
+    filestore.delete(stored_name)

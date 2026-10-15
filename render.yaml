@@ -3,7 +3,7 @@ services:
   - type: web
     name: siuru-talentmatch
     runtime: python
-    plan: starter            # a persistent disk needs a paid plan; free plans lose all data on every deploy
+    plan: free               # data lives in Supabase (database + file storage), so no disk is needed
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 180
     healthCheckPath: /healthz
@@ -12,13 +12,15 @@ services:
         value: 3.12.7
       - key: TM_ENV
         value: production
-      - key: TM_DATA_DIR
-        value: /var/data            # the persistent disk below: database + uploaded resumes
+      - key: DATABASE_URL
+        sync: false                 # Supabase > Project Settings > Database > Connection string (pooler)
+      - key: SUPABASE_URL
+        sync: false                 # https://<project-ref>.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        sync: false                 # Supabase > Project Settings > API > service_role (keep secret)
+      - key: SUPABASE_BUCKET
+        value: resumes
       - key: TM_USER
         value: hr
       - key: TM_PASSWORD
         sync: false                 # Render asks you for it in the dashboard - never commit it
-    disk:
-      name: talentmatch-data
-      mountPath: /var/data
-      sizeGB: 5

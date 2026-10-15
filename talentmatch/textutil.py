@@ -63,11 +63,80 @@ def stem(word: str) -> str:
     return w
 
 
+# Words that mean the same thing in a job post and a resume. Each group becomes ONE concept, so
+# "supervised junior developers" on a resume satisfies "lead a team of developers" in the job.
+# Single words are matched after stemming; multi-word phrases are rewritten first.
+CONCEPT_GROUPS = {
+    "lead": "lead led leading leader supervise supervised supervising oversee oversaw overseeing "
+            "spearhead spearheaded headed head manage managed managing manager direct directed "
+            "mentor mentored mentoring coach coached coaching",
+    "backend": "backend back-end server-side serverside",
+    "frontend": "frontend front-end client-side clientside ui",
+    "scale": "scalable scalability scale scaled scaling high-volume high-traffic high-throughput "
+             "high-performance",
+    "optimize": "optimize optimise optimized optimised optimizing tune tuned tuning enhance enhanced "
+                "streamline streamlined refine refined accelerate accelerated",
+    "reduce": "reduce reduced reducing cut lower lowered decrease decreased minimize minimised minimized",
+    "test": "test tested testing qa validate validated validation verify verified verification",
+    "deploy": "deploy deployed deploying deployment release released releasing rollout ship shipped "
+              "launch launched launching productionize",
+    "monitor": "monitor monitored monitoring observability alerting",
+    "analyze": "analyze analyse analyzed analysed analyzing analysing analysis investigate "
+               "investigated investigating assess assessed evaluate evaluated examine examined",
+    "debug": "debug debugged debugging troubleshoot troubleshot troubleshooting diagnose diagnosed "
+             "resolve resolved fix fixed",
+    "automate": "automate automated automating automation",
+    "migrate": "migrate migrated migrating migration ported modernize modernise modernized "
+               "modernised",
+    "integrate": "integrate integrated integrating integration interface interfaced",
+    "document": "document documented documenting documentation",
+    "customer": "customer customers client clients",
+    "stakeholder": "stakeholder stakeholders partner partners",
+    "report": "report reports reporting dashboard dashboards",
+    "secure": "secure secured security harden hardened",
+    "plan": "plan planned planning roadmap roadmapping strategize strategise",
+    "train": "train trained training onboard onboarded onboarding upskill",
+    "review": "review reviewed reviewing audit audited auditing inspect inspected",
+    "communicate": "communicate communicated communicating communication present presented presenting",
+    "engineer": "developer developers engineer engineers programmer programmers coder coders",
+    "incident": "incident incidents outage outages downtime",
+    "requirement": "requirement requirements specification specifications spec specs",
+}
+_PHRASES = [
+    (re.compile(r"(?:cross[- ]functional|cross[- ]team)", re.I), " collaborate "),
+    (re.compile(r"back[- ]?end|server[- ]side", re.I), " ~backend "),
+    (re.compile(r"front[- ]?end|client[- ]side|user interfaces?", re.I), " ~frontend "),
+    (re.compile(r"high[- ](?:volume|traffic|throughput|performance)", re.I), " ~scale "),
+    (re.compile(r"root[- ]cause", re.I), " ~debug "),
+    (re.compile(r"quality assurance", re.I), " ~test "),
+    (re.compile(r"code reviews?|peer reviews?|pull requests?", re.I), " ~review "),
+    (re.compile(r"go[- ]live", re.I), " ~deploy "),
+    (re.compile(r"people management|team management", re.I), " ~lead "),
+]
+_CONCEPT_OF = {}
+for _name, _words in CONCEPT_GROUPS.items():
+    for _w in _words.split():
+        _CONCEPT_OF.setdefault(stem(_w), "~" + _name)
+        _CONCEPT_OF.setdefault(_w, "~" + _name)
+
+
 def content_stems(text: str):
-    """Set of meaningful word stems from text (stopwords/generic verbs removed)."""
+    """Set of meaningful word stems from text (stopwords/generic verbs removed).
+
+    Synonyms collapse into shared concept tokens ("~lead", "~deploy", ...), so different wording
+    with the same meaning produces the same stem."""
+    for rx, repl in _PHRASES:
+        text = rx.sub(repl, text)
     out = set()
-    for w in re.findall(r"[A-Za-z][A-Za-z0-9+#]*", text):
+    for w in re.findall(r"~?[A-Za-z][A-Za-z0-9+#]*", text):
+        if w.startswith("~"):
+            out.add(w.lower())
+            continue
         lw = w.lower()
+        concept = _CONCEPT_OF.get(lw) or _CONCEPT_OF.get(stem(lw))
+        if concept:
+            out.add(concept)
+            continue
         if lw in STOPWORDS or lw in GENERIC_VERBS or len(lw) < 3:
             continue
         out.add(stem(lw))
